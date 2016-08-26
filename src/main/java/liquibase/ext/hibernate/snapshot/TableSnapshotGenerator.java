@@ -1,8 +1,6 @@
 package liquibase.ext.hibernate.snapshot;
 
-import liquibase.datatype.DataTypeFactory;
 import liquibase.datatype.LiquibaseDataType;
-import liquibase.datatype.core.UnknownType;
 import liquibase.exception.DatabaseException;
 import liquibase.ext.hibernate.database.HibernateDatabase;
 import liquibase.ext.hibernate.snapshot.extension.ExtendedSnapshotGenerator;
@@ -10,29 +8,17 @@ import liquibase.ext.hibernate.snapshot.extension.MultipleHiLoPerTableSnapshotGe
 import liquibase.ext.hibernate.snapshot.extension.TableGeneratorSnapshotGenerator;
 import liquibase.snapshot.DatabaseSnapshot;
 import liquibase.snapshot.InvalidExampleException;
-import liquibase.snapshot.JdbcDatabaseSnapshot;
-import liquibase.snapshot.SnapshotIdService;
-import liquibase.statement.DatabaseFunction;
 import liquibase.structure.DatabaseObject;
 import liquibase.structure.core.*;
-import liquibase.util.SqlUtil;
-import liquibase.util.StringUtils;
-import org.hibernate.cfg.Configuration;
-import org.hibernate.dialect.Dialect;
-import org.hibernate.dialect.PostgreSQL81Dialect;
-import org.hibernate.engine.spi.Mapping;
 import org.hibernate.id.IdentifierGenerator;
-import org.hibernate.id.IdentityGenerator;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.mapping.RootClass;
-import org.hibernate.mapping.SimpleValue;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import org.hibernate.boot.Metadata;
 
 public class TableSnapshotGenerator extends HibernateSnapshotGenerator {
 
@@ -74,9 +60,9 @@ public class TableSnapshotGenerator extends HibernateSnapshotGenerator {
 
             Schema schema = (Schema) foundObject;
             HibernateDatabase database = (HibernateDatabase) snapshot.getDatabase();
-            Configuration cfg = database.getConfiguration();
+            Metadata metadata = database.getMetadata();
 
-            Iterator<org.hibernate.mapping.Table> tableMappings = cfg.getTableMappings();
+            Iterator<org.hibernate.mapping.Table> tableMappings = metadata.collectTableMappings().iterator();
             while (tableMappings.hasNext()) {
                 org.hibernate.mapping.Table hibernateTable = (org.hibernate.mapping.Table) tableMappings.next();
                 if (hibernateTable.isPhysicalTable()) {
@@ -87,13 +73,13 @@ public class TableSnapshotGenerator extends HibernateSnapshotGenerator {
                 }
             }
 
-            Iterator<PersistentClass> classMappings = cfg.getClassMappings();
+            Iterator<PersistentClass> classMappings = metadata.getEntityBindings().iterator();
             while (classMappings.hasNext()) {
                 PersistentClass persistentClass = (PersistentClass) classMappings
                         .next();
                 if (!persistentClass.isInherited()) {
                     IdentifierGenerator ig = persistentClass.getIdentifier().createIdentifierGenerator(
-                            cfg.getIdentifierGeneratorFactory(),
+                            metadata.getIdentifierGeneratorFactory(),
                             database.getDialect(),
                             null,
                             null,

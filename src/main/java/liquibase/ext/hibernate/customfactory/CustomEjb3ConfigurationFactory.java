@@ -2,7 +2,7 @@ package liquibase.ext.hibernate.customfactory;
 
 import liquibase.ext.hibernate.database.HibernateDatabase;
 import liquibase.ext.hibernate.database.connection.HibernateConnection;
-import org.hibernate.cfg.Configuration;
+import org.hibernate.boot.Metadata;
 
 /**
  * Implement this interface to dynamically generate a hibernate:ejb3 configuration.
@@ -11,8 +11,8 @@ import org.hibernate.cfg.Configuration;
 public interface CustomEjb3ConfigurationFactory {
 
     /**
-     * Create a hibernate Configuration for the given database and connection.
+     * Create a hibernate Metadata for the given database and connection.
      */
-    Configuration getConfiguration(HibernateDatabase hibernateDatabase, HibernateConnection connection);
+    Metadata getConfiguration(HibernateDatabase hibernateDatabase, HibernateConnection connection);
 
 }

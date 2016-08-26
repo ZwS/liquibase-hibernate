@@ -10,7 +10,6 @@ import liquibase.database.jvm.JdbcConnection;
 import liquibase.exception.DatabaseException;
 import liquibase.ext.hibernate.database.connection.HibernateConnection;
 import liquibase.integration.commandline.CommandLineUtils;
-import liquibase.integration.commandline.Main;
 import liquibase.snapshot.DatabaseSnapshot;
 import liquibase.snapshot.SnapshotControl;
 import liquibase.snapshot.SnapshotGeneratorFactory;
@@ -58,8 +57,8 @@ public class HibernateClassicDatabaseTest {
     public void testHibernateUrlSimple() throws DatabaseException {
         conn = new JdbcConnection(new HibernateConnection("hibernate:classic:com/example/pojo/Hibernate.cfg.xml"));
         db.setConnection(conn);
-        assertNotNull(db.getConfiguration().getClassMapping(AuctionItem.class.getName()));
-        assertNotNull(db.getConfiguration().getClassMapping(Watcher.class.getName()));
+        assertNotNull(db.getMetadata().getEntityBinding(AuctionItem.class.getName()));
+        assertNotNull(db.getMetadata().getEntityBinding(Watcher.class.getName()));
     }
 
 
@@ -67,7 +66,7 @@ public class HibernateClassicDatabaseTest {
     public void testCustomConfigMustHaveItemClassMapping() throws DatabaseException {
         conn = new JdbcConnection(new HibernateConnection("hibernate:classic:" + CUSTOMCONFIG_CLASS));
         db.setConnection(conn);
-        assertNotNull(db.getConfiguration().getClassMapping(Item.class.getName()));
+        assertNotNull(db.getMetadata().getEntityBinding(Item.class.getName()));
     }
 
     @Test
@@ -112,33 +111,15 @@ public class HibernateClassicDatabaseTest {
 
         assertThat(bidTable.getOutgoingForeignKeys(), containsInAnyOrder(
                 allOf(
-                        hasProperty("primaryKeyColumns", hasToString("[AuctionItem.id]")),
-                        hasProperty("foreignKeyColumns", hasToString("[Bid.item]")),
+                        hasProperty("primaryKeyColumns", hasToString("[HIBERNATE.AuctionItem.id]")),
+                        hasProperty("foreignKeyColumns", hasToString("[HIBERNATE.Bid.item]")),
                         hasProperty("primaryKeyTable", hasProperty("name", is("AuctionItem")))
                 ),
                 allOf(
-                        hasProperty("primaryKeyColumns", hasToString("[AuctionUser.id]")),
-                        hasProperty("foreignKeyColumns", hasToString("[Bid.bidder]")),
+                        hasProperty("primaryKeyColumns", hasToString("[HIBERNATE.AuctionUser.id]")),
+                        hasProperty("foreignKeyColumns", hasToString("[HIBERNATE.Bid.bidder]")),
                         hasProperty("primaryKeyTable", hasProperty("name", is("AuctionUser")))
                 )
         ));
     }
-
-    @Test
-    public void hibernateUrlWithNamingStrategy() throws Exception {
-        String url = "hibernate:classic:com/example/pojo/Hibernate.cfg.xml?hibernate.ejb.naming_strategy=org.hibernate.cfg.ImprovedNamingStrategy";
-        Database database = CommandLineUtils.createDatabaseObject(this.getClass().getClassLoader(), url, null, null, null, null, null, false, false, null, null, null, null, null, null, null);
-
-        assertNotNull(database);
-
-        DatabaseSnapshot snapshot = SnapshotGeneratorFactory.getInstance().createSnapshot(CatalogAndSchema.DEFAULT, database, new SnapshotControl(database));
-
-        assertThat(snapshot.get(Table.class), containsInAnyOrder(
-                hasProperty("name", is("bid")),
-                hasProperty("name", is("watcher")),
-                hasProperty("name", is("auction_user")),
-                hasProperty("name", is("auction_item"))));
-
-    }
-
 }

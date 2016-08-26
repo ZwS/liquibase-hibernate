@@ -1,5 +1,6 @@
 package liquibase.ext.hibernate.snapshot.extension;
 
+import java.lang.reflect.Field;
 import liquibase.exception.UnexpectedLiquibaseException;
 import liquibase.structure.core.Column;
 import liquibase.structure.core.DataType;
@@ -7,12 +8,10 @@ import liquibase.structure.core.Table;
 import org.hibernate.id.IdentifierGenerator;
 import org.hibernate.id.MultipleHiLoPerTableGenerator;
 
-import java.lang.reflect.Field;
-
 public class MultipleHiLoPerTableSnapshotGenerator implements ExtendedSnapshotGenerator<IdentifierGenerator, Table> {
 
     private static final String TABLE_NAME = "tableName";
-    private static final String PK_COLUMN_NAME = "pkColumnName";
+    private static final String PK_COLUMN_NAME = "segmentColumnName";
     private static final String VALUE_COLUMN_NAME = "valueColumnName";
     private static final String KEY_SIZE = "keySize";
 

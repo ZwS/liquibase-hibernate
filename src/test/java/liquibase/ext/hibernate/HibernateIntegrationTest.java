@@ -1,5 +1,13 @@
 package liquibase.ext.hibernate;
 
+import java.io.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import liquibase.Liquibase;
 import liquibase.database.Database;
 import liquibase.database.core.HsqlDatabase;
@@ -19,7 +27,9 @@ import liquibase.resource.ClassLoaderResourceAccessor;
 import liquibase.resource.FileSystemResourceAccessor;
 import liquibase.structure.DatabaseObject;
 import liquibase.structure.core.*;
-import org.hibernate.cfg.Configuration;
+import org.hibernate.boot.MetadataSources;
+import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
+import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.cfg.Environment;
 import org.hibernate.tool.hbm2ddl.SchemaExport;
 import org.hibernate.tool.hbm2ddl.SchemaUpdate;
@@ -27,12 +37,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
-
-import java.io.*;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.util.*;
-import java.util.Map.Entry;
 
 import static junit.framework.TestCase.assertEquals;
 import static junit.framework.TestCase.assertTrue;
@@ -140,13 +144,12 @@ public class HibernateIntegrationTest {
 
         SingleConnectionDataSource ds = new SingleConnectionDataSource(connection, true);
 
-        Configuration cfg = new Configuration();
-        cfg.configure(HIBERNATE_CONFIG_FILE);
-        Properties properties = new Properties();
-        properties.put(Environment.DATASOURCE, ds);
-        cfg.addProperties(properties);
+        StandardServiceRegistryBuilder standardServiceRegistryBuilder = new StandardServiceRegistryBuilder();
+        standardServiceRegistryBuilder.configure(HIBERNATE_CONFIG_FILE);
+        standardServiceRegistryBuilder.applySetting(Environment.DATASOURCE, ds);
+        MetadataSources metadataSources = new MetadataSources(standardServiceRegistryBuilder.build());
 
-        SchemaExport export = new SchemaExport(cfg);
+        SchemaExport export = new SchemaExport((MetadataImplementor) metadataSources.buildMetadata());
         export.execute(true, true, false, false);
 
         Database hibernateDatabase = new HibernateClassicDatabase();
@@ -208,16 +211,18 @@ public class HibernateIntegrationTest {
         Database database2 = new HsqlDatabase();
         database2.setConnection(new JdbcConnection(connection2));
 
-        Configuration cfg = new Configuration();
-        cfg.configure(HIBERNATE_CONFIG_FILE);
-        cfg.getProperties().remove(Environment.DATASOURCE);
-        cfg.setProperty(Environment.URL, "jdbc:hsqldb:mem:TESTDB2" + currentTimeMillis);
+        StandardServiceRegistryBuilder standardServiceRegistryBuilder = new StandardServiceRegistryBuilder();
+        standardServiceRegistryBuilder.configure(HIBERNATE_CONFIG_FILE);
+        standardServiceRegistryBuilder.applySetting(Environment.URL, "jdbc:hsqldb:mem:TESTDB2" + currentTimeMillis);
+        standardServiceRegistryBuilder.applySetting(Environment.USER, "SA");
+        standardServiceRegistryBuilder.applySetting(Environment.PASS, "");
+        MetadataSources metadataSources = new MetadataSources(standardServiceRegistryBuilder.build());
 
-        SchemaUpdate update = new SchemaUpdate(cfg);
+        SchemaUpdate update = new SchemaUpdate((MetadataImplementor) metadataSources.buildMetadata());
         update.execute(true, true);
 
         diffResult = liquibase.diff(database, database2, compareControl);
-        
+
         ignoreDatabaseChangeLogTable(diffResult);
         ignoreConversionFromFloatToDouble64(diffResult);
 

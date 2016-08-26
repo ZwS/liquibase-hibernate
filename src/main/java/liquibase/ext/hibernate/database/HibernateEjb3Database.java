@@ -1,17 +1,14 @@
 package liquibase.ext.hibernate.database;
 
+import java.util.Map;
 import liquibase.database.DatabaseConnection;
 import liquibase.exception.DatabaseException;
 import liquibase.ext.hibernate.customfactory.CustomEjb3ConfigurationFactory;
 import liquibase.ext.hibernate.database.connection.HibernateConnection;
-import org.hibernate.cfg.Configuration;
-import org.hibernate.cfg.NamingStrategy;
+import org.hibernate.boot.Metadata;
 import org.hibernate.jpa.HibernatePersistenceProvider;
 import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl;
 import org.hibernate.jpa.boot.spi.EntityManagerFactoryBuilder;
-import org.hibernate.service.ServiceRegistry;
-
-import java.util.Map;
 
 /**
  * Database implementation for "ejb3" hibernate configurations.
@@ -24,7 +21,7 @@ public class HibernateEjb3Database extends HibernateDatabase {
     }
 
     @Override
-    protected Configuration buildConfiguration(HibernateConnection connection) throws DatabaseException {
+    protected Metadata obtainMetadata(HibernateConnection connection) throws DatabaseException {
 
         if (isCustomFactoryClass(connection.getPath())) {
             return buildConfigurationFromFactory(connection);
@@ -35,21 +32,18 @@ public class HibernateEjb3Database extends HibernateDatabase {
     /**
      * Build a Configuration object assuming the connection path is a hibernate XML configuration file.
      */
-    protected Configuration buildConfigurationfromFile(HibernateConnection connection) {
+    protected Metadata buildConfigurationfromFile(HibernateConnection connection) {
 
         MyHibernatePersistenceProvider persistenceProvider = new MyHibernatePersistenceProvider();
         EntityManagerFactoryBuilderImpl builder = (EntityManagerFactoryBuilderImpl) persistenceProvider.getEntityManagerFactoryBuilderOrNull(connection.getPath(), connection.getProperties(), null);
-        ServiceRegistry serviceRegistry = builder.buildServiceRegistry();
-
-        Configuration configuration = builder.buildHibernateConfiguration(serviceRegistry);
-        configureNamingStrategy(configuration, connection);
-        return configuration;
+        builder.build();
+        return builder.getMetadata();
     }
 
     /**
      * Build a Configuration object assuming the connection path is a {@link CustomEjb3ConfigurationFactory} class name
      */
-    protected Configuration buildConfigurationFromFactory(HibernateConnection connection) throws DatabaseException {
+    protected Metadata buildConfigurationFromFactory(HibernateConnection connection) throws DatabaseException {
         try {
             return ((CustomEjb3ConfigurationFactory) Class.forName(connection.getPath()).newInstance()).getConfiguration(this, connection);
         } catch (InstantiationException e) {

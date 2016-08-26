@@ -1,5 +1,11 @@
 package liquibase.ext.hibernate;
 
+import java.io.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.util.Map.Entry;
+import java.util.*;
+import javax.persistence.spi.PersistenceUnitInfo;
 import liquibase.Liquibase;
 import liquibase.database.Database;
 import liquibase.database.core.HsqlDatabase;
@@ -19,15 +25,14 @@ import liquibase.resource.ClassLoaderResourceAccessor;
 import liquibase.resource.FileSystemResourceAccessor;
 import liquibase.structure.DatabaseObject;
 import liquibase.structure.core.*;
-import org.hibernate.cfg.Configuration;
+import org.hibernate.boot.Metadata;
+import org.hibernate.boot.spi.MetadataImplementor;
 import org.hibernate.cfg.Environment;
 import org.hibernate.dialect.HSQLDialect;
-import org.hibernate.envers.configuration.spi.AuditConfiguration;
 import org.hibernate.jpa.HibernatePersistenceProvider;
 import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl;
 import org.hibernate.jpa.boot.spi.Bootstrap;
 import org.hibernate.jpa.boot.spi.EntityManagerFactoryBuilder;
-import org.hibernate.service.ServiceRegistry;
 import org.hibernate.tool.hbm2ddl.SchemaExport;
 import org.hibernate.tool.hbm2ddl.SchemaUpdate;
 import org.junit.After;
@@ -37,13 +42,6 @@ import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.orm.jpa.persistenceunit.DefaultPersistenceUnitManager;
 import org.springframework.orm.jpa.persistenceunit.SmartPersistenceUnitInfo;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-
-import javax.persistence.spi.PersistenceUnitInfo;
-import java.io.*;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.util.*;
-import java.util.Map.Entry;
 
 import static junit.framework.TestCase.assertEquals;
 import static junit.framework.TestCase.assertTrue;
@@ -161,12 +159,11 @@ public class SpringPackageScanningIntegrationTest {
 
         SingleConnectionDataSource ds = new SingleConnectionDataSource(connection, true);
 
-        Configuration cfg = createSpringPackageScanningConfiguration(enhancedId);
         Properties properties = new Properties();
         properties.put(Environment.DATASOURCE, ds);
-        cfg.addProperties(properties);
+        Metadata metadata = createSpringPackageScanningConfiguration(enhancedId, properties);
 
-        SchemaExport export = new SchemaExport(cfg);
+        SchemaExport export = new SchemaExport((MetadataImplementor) metadata);
         export.execute(true, true, false, false);
 
         Database hibernateDatabase = new HibernateSpringDatabase();
@@ -190,7 +187,7 @@ public class SpringPackageScanningIntegrationTest {
 
     }
 
-    private Configuration createSpringPackageScanningConfiguration(boolean enhancedId) {
+    private Metadata createSpringPackageScanningConfiguration(boolean enhancedId, Properties properties) {
         DefaultPersistenceUnitManager internalPersistenceUnitManager = new DefaultPersistenceUnitManager();
 
         internalPersistenceUnitManager.setPackagesToScan(PACKAGES);
@@ -205,17 +202,17 @@ public class SpringPackageScanningIntegrationTest {
         jpaPropertyMap.put("hibernate.archive.autodetection", "false");
         jpaPropertyMap.put("hibernate.id.new_generator_mappings", enhancedId ? "true" : "false");
 
+        for (String name : properties.stringPropertyNames())
+            jpaPropertyMap.put(name, properties.get(name));
+
         if (persistenceUnitInfo instanceof SmartPersistenceUnitInfo) {
             ((SmartPersistenceUnitInfo) persistenceUnitInfo).setPersistenceProviderPackageName(jpaVendorAdapter.getPersistenceProviderRootPackage());
         }
 
         EntityManagerFactoryBuilderImpl builder = (EntityManagerFactoryBuilderImpl) Bootstrap.getEntityManagerFactoryBuilder(persistenceUnitInfo,
-                jpaPropertyMap, null);
-        ServiceRegistry serviceRegistry = builder.buildServiceRegistry();
-        Configuration configuration = builder.buildHibernateConfiguration(serviceRegistry);
-        configuration.buildMappings();
-        AuditConfiguration.getFor(configuration);
-        return configuration;
+                jpaPropertyMap, (ClassLoader) null);
+        builder.build();
+        return builder.getMetadata();
     }
 
     /**
@@ -275,10 +272,11 @@ public class SpringPackageScanningIntegrationTest {
         Database database2 = new HsqlDatabase();
         database2.setConnection(new JdbcConnection(connection2));
 
-        Configuration cfg = createSpringPackageScanningConfiguration(enhancedId);
-        cfg.setProperty("hibernate.connection.url", "jdbc:hsqldb:mem:TESTDB2" + currentTimeMillis);
+        Properties properties = new Properties();
+        properties.put(Environment.URL, "jdbc:hsqldb:mem:TESTDB2" + currentTimeMillis);
+        Metadata metadata = createSpringPackageScanningConfiguration(enhancedId, properties);
 
-        SchemaUpdate update = new SchemaUpdate(cfg);
+        SchemaUpdate update = new SchemaUpdate((MetadataImplementor) metadata);
         update.execute(true, true);
 
         diffResult = liquibase.diff(database, database2, compareControl);

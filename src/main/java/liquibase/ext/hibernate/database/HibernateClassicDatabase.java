@@ -4,8 +4,9 @@ import liquibase.database.DatabaseConnection;
 import liquibase.exception.DatabaseException;
 import liquibase.ext.hibernate.customfactory.CustomClassicConfigurationFactory;
 import liquibase.ext.hibernate.database.connection.HibernateConnection;
-import org.hibernate.cfg.Configuration;
-import org.hibernate.cfg.NamingStrategy;
+import org.hibernate.boot.Metadata;
+import org.hibernate.boot.MetadataSources;
+import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 
 /**
  * Database implementation for "classic" hibernate configurations.
@@ -13,12 +14,13 @@ import org.hibernate.cfg.NamingStrategy;
  */
 public class HibernateClassicDatabase extends HibernateDatabase {
 
+    @Override
     public boolean isCorrectDatabaseImplementation(DatabaseConnection conn) throws DatabaseException {
         return conn.getURL().startsWith("hibernate:classic:");
     }
 
     @Override
-    protected Configuration buildConfiguration(HibernateConnection connection) throws DatabaseException {
+    protected Metadata obtainMetadata(HibernateConnection connection) throws DatabaseException {
 
         if (isCustomFactoryClass(connection.getPath())) {
             return buildConfigurationFromFactory(connection);
@@ -30,7 +32,7 @@ public class HibernateClassicDatabase extends HibernateDatabase {
     /**
      * Build a Configuration object assuming the connection path is a {@link CustomClassicConfigurationFactory} class name
      */
-    protected Configuration buildConfigurationFromFactory(HibernateConnection connection) throws DatabaseException {
+    protected Metadata buildConfigurationFromFactory(HibernateConnection connection) throws DatabaseException {
         try {
             return ((CustomClassicConfigurationFactory) Class.forName(connection.getPath()).newInstance()).getConfiguration(this, connection);
         } catch (InstantiationException e) {
@@ -45,11 +47,13 @@ public class HibernateClassicDatabase extends HibernateDatabase {
     /**
      * Build a Configuration object assuming the connection path is a hibernate XML configuration file.
      */
-    protected Configuration buildConfigurationfromFile(HibernateConnection connection) {
-        Configuration configuration = new Configuration();
-        configuration.configure(connection.getPath());
-        configureNamingStrategy(configuration, connection);
-        return configuration;
+    protected Metadata buildConfigurationfromFile(HibernateConnection connection) {
+        StandardServiceRegistryBuilder standardServiceRegistryBuilder = new StandardServiceRegistryBuilder(buildBootstrapServiceRegistry());
+        
+        standardServiceRegistryBuilder.configure(connection.getPath());
+        configurePhysicalNamingStrategy(standardServiceRegistryBuilder, connection);
+        MetadataSources metadataSources = new MetadataSources(standardServiceRegistryBuilder.build());
+        return metadataSources.buildMetadata();
     }
 
     /**
@@ -77,7 +81,4 @@ public class HibernateClassicDatabase extends HibernateDatabase {
     protected String getDefaultDatabaseProductName() {
         return "Hibernate Classic";
     }
-
-
-
 }

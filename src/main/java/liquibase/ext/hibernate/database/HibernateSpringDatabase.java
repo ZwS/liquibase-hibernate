@@ -1,12 +1,19 @@
 package liquibase.ext.hibernate.database;
 
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import javax.persistence.spi.PersistenceUnitInfo;
+import javax.xml.parsers.DocumentBuilderFactory;
 import liquibase.database.DatabaseConnection;
 import liquibase.exception.DatabaseException;
 import liquibase.ext.hibernate.database.connection.HibernateConnection;
-import org.hibernate.cfg.Configuration;
+import org.hibernate.boot.Metadata;
+import org.hibernate.boot.MetadataSources;
+import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
 import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl;
 import org.hibernate.jpa.boot.spi.Bootstrap;
-import org.hibernate.service.ServiceRegistry;
 import org.springframework.beans.MutablePropertyValues;
 import org.springframework.beans.PropertyValue;
 import org.springframework.beans.factory.config.BeanDefinition;
@@ -23,19 +30,6 @@ import org.springframework.orm.hibernate4.LocalSessionFactoryBean;
 import org.springframework.orm.jpa.persistenceunit.DefaultPersistenceUnitManager;
 import org.springframework.orm.jpa.persistenceunit.SmartPersistenceUnitInfo;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.w3c.dom.Document;
-import org.xml.sax.EntityResolver;
-import org.xml.sax.InputSource;
-import org.xml.sax.SAXException;
-
-import javax.persistence.spi.PersistenceUnitInfo;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import java.io.IOException;
-import java.io.StringReader;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
 
 /**
  * Database implementation for "spring" hibernate configurations.
@@ -48,7 +42,7 @@ public class HibernateSpringDatabase extends HibernateDatabase {
     }
 
     @Override
-    protected Configuration buildConfiguration(HibernateConnection connection) throws DatabaseException {
+    protected Metadata obtainMetadata(HibernateConnection connection) throws DatabaseException {
         if (isXmlFile(connection.getPath())) {
             return buildConfigurationFromXml(connection);
         } else {
@@ -80,8 +74,7 @@ public class HibernateSpringDatabase extends HibernateDatabase {
     /**
      * Parse the given URL assuming it is a spring XML file
      */
-    protected Configuration buildConfigurationFromXml(HibernateConnection connection) throws DatabaseException {
-        Configuration config = new Configuration();
+    protected Metadata buildConfigurationFromXml(HibernateConnection connection) throws DatabaseException {
 
         // Disable xml validation
         DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
@@ -114,6 +107,25 @@ public class HibernateSpringDatabase extends HibernateDatabase {
 
         MutablePropertyValues properties = beanDef.getPropertyValues();
 
+        StandardServiceRegistryBuilder standardServiceRegistryBuilder = new StandardServiceRegistryBuilder();
+        ManagedProperties hibernateProperties = (ManagedProperties) properties.getPropertyValue("hibernateProperties").getValue();
+
+        if (hibernateProperties != null) {
+            Properties configurationProperties = new Properties();
+            for (Map.Entry<?, ?> entry : hibernateProperties.entrySet()) {
+                TypedStringValue key = (TypedStringValue) entry.getKey();
+                TypedStringValue value = (TypedStringValue) entry.getValue();
+
+                configurationProperties.setProperty(key.getValue(), value.getValue());
+            }
+
+            standardServiceRegistryBuilder.applySettings(configurationProperties);
+        } else {
+            throw new IllegalStateException("Please provide a 'hibernateProperties' property set to define the hibernate connection settings.");
+        }
+
+        MetadataSources metadataSources = new MetadataSources(standardServiceRegistryBuilder.build());
+
         // Add annotated classes list.
         PropertyValue annotatedClassesProperty = properties.getPropertyValue("annotatedClasses");
         if (annotatedClassesProperty != null) {
@@ -121,7 +133,7 @@ public class HibernateSpringDatabase extends HibernateDatabase {
             if (annotatedClasses != null) {
                 for (TypedStringValue className : annotatedClasses) {
                     LOG.info("Found annotated class " + className.getValue());
-                    config.addAnnotatedClass(findClass(className.getValue()));
+                    metadataSources.addAnnotatedClass(findClass(className.getValue()));
                 }
             }
         }
@@ -138,21 +150,7 @@ public class HibernateSpringDatabase extends HibernateDatabase {
                         Resource[] resources = resourcePatternResolver.getResources(mappingLocation.getValue());
                         for (int i = 0; i < resources.length; i++) {
                             LOG.info("Adding resource  " + resources[i].getURL());
-                            try {
-                                DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
-                                // Disable DTD resolution
-                                documentBuilder.setEntityResolver(new EntityResolver() {
-
-                                    @Override
-                                    public InputSource resolveEntity(String arg0, String arg1) throws SAXException, IOException {
-                                        return new InputSource(new StringReader(""));
-                                    }
-                                });
-                                Document document = documentBuilder.parse(resources[i].getInputStream());
-                                config.addDocument(document);
-                            } catch (SAXException e) {
-                                throw new DatabaseException("Error reading document " + resources[i].getURL(), e);
-                            }
+                            metadataSources.addInputStream(resources[i].getInputStream());
                         }
                     }
                 }
@@ -165,24 +163,7 @@ public class HibernateSpringDatabase extends HibernateDatabase {
             }
         }
 
-        // Add properties
-        ManagedProperties hibernateProperties = (ManagedProperties) properties.getPropertyValue("hibernateProperties").getValue();
-
-        if (hibernateProperties != null) {
-            Properties configurationProperties = new Properties();
-            for (Map.Entry<?, ?> entry : hibernateProperties.entrySet()) {
-                TypedStringValue key = (TypedStringValue) entry.getKey();
-                TypedStringValue value = (TypedStringValue) entry.getValue();
-
-                configurationProperties.setProperty(key.getValue(), value.getValue());
-            }
-
-            config.setProperties(configurationProperties);
-        } else {
-            throw new IllegalStateException("Please provide a 'hibernateProperties' property set to define the hibernate connection settings.");
-        }
-
-        return config;
+        return metadataSources.buildMetadata();
     }
 
     private Class<?> findClass(String className) {
@@ -207,7 +188,7 @@ public class HibernateSpringDatabase extends HibernateDatabase {
      * @param connection
      * @return
      */
-    public Configuration buildConfigurationFromScanning(HibernateConnection connection) {
+    public Metadata buildConfigurationFromScanning(HibernateConnection connection) {
         String[] packagesToScan = connection.getPath().split(",");
 
         for (String packageName : packagesToScan) {
@@ -242,8 +223,8 @@ public class HibernateSpringDatabase extends HibernateDatabase {
 
         EntityManagerFactoryBuilderImpl builder = (EntityManagerFactoryBuilderImpl) Bootstrap.getEntityManagerFactoryBuilder(persistenceUnitInfo,
                 jpaPropertyMap);
-        ServiceRegistry serviceRegistry = builder.buildServiceRegistry();
-        return builder.buildHibernateConfiguration(serviceRegistry);
+        builder.build();
+        return builder.getMetadata();
 
     }
 
@@ -256,5 +237,4 @@ public class HibernateSpringDatabase extends HibernateDatabase {
     protected String getDefaultDatabaseProductName() {
         return "Hibernate Spring";
     }
-
 }

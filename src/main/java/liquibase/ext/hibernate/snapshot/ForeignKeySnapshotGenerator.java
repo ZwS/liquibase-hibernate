@@ -8,9 +8,9 @@ import liquibase.snapshot.InvalidExampleException;
 import liquibase.structure.DatabaseObject;
 import liquibase.structure.core.ForeignKey;
 import liquibase.structure.core.Table;
-import org.hibernate.cfg.Configuration;
 
 import java.util.Iterator;
+import org.hibernate.boot.Metadata;
 
 public class ForeignKeySnapshotGenerator extends HibernateSnapshotGenerator {
 
@@ -31,8 +31,8 @@ public class ForeignKeySnapshotGenerator extends HibernateSnapshotGenerator {
         if (foundObject instanceof Table) {
             Table table = (Table) foundObject;
             HibernateDatabase database = (HibernateDatabase) snapshot.getDatabase();
-            Configuration cfg = database.getConfiguration();
-            Iterator<org.hibernate.mapping.Table> tableMappings = cfg.getTableMappings();
+            Metadata metadata = database.getMetadata();
+            Iterator<org.hibernate.mapping.Table> tableMappings = metadata.collectTableMappings().iterator();
             while (tableMappings.hasNext()) {
                 org.hibernate.mapping.Table hibernateTable = (org.hibernate.mapping.Table) tableMappings.next();
                 Iterator fkIterator = hibernateTable.getForeignKeyIterator();

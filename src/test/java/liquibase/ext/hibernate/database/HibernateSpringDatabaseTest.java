@@ -40,8 +40,8 @@ public class HibernateSpringDatabaseTest {
     public void testSpringUrlSimple() throws DatabaseException {
         conn = new JdbcConnection(new HibernateConnection("hibernate:spring:spring.ctx.xml?bean=sessionFactory"));
         db.setConnection(conn);
-        assertNotNull(db.getConfiguration().getClassMapping(AuctionItem.class.getName()));
-        assertNotNull(db.getConfiguration().getClassMapping(Watcher.class.getName()));
+        assertNotNull(db.getMetadata().getEntityBinding(AuctionItem.class.getName()));
+        assertNotNull(db.getMetadata().getEntityBinding(Watcher.class.getName()));
     }
 
 
@@ -49,8 +49,8 @@ public class HibernateSpringDatabaseTest {
     public void testSpringPackageScanningMustHaveItemClassMapping() throws DatabaseException {
         conn = new JdbcConnection(new HibernateConnection("hibernate:spring:com.example.ejb3.auction?dialect=" + HSQLDialect.class.getName()));
         db.setConnection(conn);
-        assertNotNull(db.getConfiguration().getClassMapping(Bid.class.getName()));
-        assertNotNull(db.getConfiguration().getClassMapping(BuyNow.class.getName()));
+        assertNotNull(db.getMetadata().getEntityBinding(Bid.class.getName()));
+        assertNotNull(db.getMetadata().getEntityBinding(BuyNow.class.getName()));
     }
 
     @Test

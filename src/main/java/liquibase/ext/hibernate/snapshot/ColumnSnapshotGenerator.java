@@ -1,5 +1,9 @@
 package liquibase.ext.hibernate.snapshot;
 
+import java.util.Iterator;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import liquibase.datatype.DataTypeFactory;
 import liquibase.datatype.core.UnknownType;
 import liquibase.exception.DatabaseException;
@@ -8,24 +12,17 @@ import liquibase.snapshot.DatabaseSnapshot;
 import liquibase.snapshot.InvalidExampleException;
 import liquibase.statement.DatabaseFunction;
 import liquibase.structure.DatabaseObject;
-import liquibase.structure.core.*;
 import liquibase.structure.core.Column;
-import liquibase.structure.core.PrimaryKey;
+import liquibase.structure.core.DataType;
+import liquibase.structure.core.Relation;
 import liquibase.structure.core.Table;
 import liquibase.util.SqlUtil;
 import liquibase.util.StringUtils;
-import org.hibernate.cfg.Configuration;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.dialect.PostgreSQL81Dialect;
 import org.hibernate.engine.spi.Mapping;
 import org.hibernate.id.IdentityGenerator;
-import org.hibernate.mapping.*;
-
-import java.rmi.UnexpectedException;
-import java.util.*;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import org.hibernate.mapping.SimpleValue;
 
 /**
  * Columns are snapshotted along with with Tables in {@link TableSnapshotGenerator} but this class needs to be here to keep the default ColumnSnapshotGenerator from running.
@@ -93,10 +90,8 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
             return;
         }
 
-        Configuration cfg = database.getConfiguration();
-
         Dialect dialect = database.getDialect();
-        Mapping mapping = cfg.buildMapping();
+        Mapping mapping = database.getMetadata();
 
 
         Iterator columnIterator = hibernateTable.getColumnIterator();
@@ -154,9 +149,11 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
                     }
 
                     if (isPrimaryKeyColumn) {
-                        String identifierGeneratorStrategy = hibernateColumn.getValue().isSimpleValue() ?
+                        String identifierGeneratorStrategy = hibernateColumn.getValue() instanceof SimpleValue ?
                                 ((SimpleValue) hibernateColumn.getValue()).getIdentifierGeneratorStrategy() : null;
-                        if (("native".equalsIgnoreCase(identifierGeneratorStrategy) || "identity".equalsIgnoreCase(identifierGeneratorStrategy))) {
+                        if (("org.hibernate.id.enhanced.SequenceStyleGenerator".equalsIgnoreCase(identifierGeneratorStrategy)
+                                || "native".equalsIgnoreCase(identifierGeneratorStrategy)
+                                || "identity".equalsIgnoreCase(identifierGeneratorStrategy))) {
                             if (PostgreSQL81Dialect.class.isAssignableFrom(dialect.getClass())) {
                                 column.setAutoIncrementInformation(new Column.AutoIncrementInformation());
                                 String sequenceName = (column.getRelation().getName() + "_" + column.getName() + "_seq").toLowerCase();

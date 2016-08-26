@@ -1,17 +1,15 @@
 package liquibase.ext.hibernate.database;
 
+import java.util.Collections;
+import javax.persistence.spi.PersistenceUnitInfo;
 import liquibase.database.DatabaseConnection;
 import liquibase.exception.DatabaseException;
 import liquibase.ext.hibernate.database.connection.HibernateConnection;
 import liquibase.ext.hibernate.database.connection.HibernateDriver;
-import org.hibernate.cfg.Configuration;
+import org.hibernate.boot.Metadata;
 import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl;
 import org.hibernate.jpa.boot.spi.Bootstrap;
-import org.hibernate.service.ServiceRegistry;
 import org.springframework.orm.jpa.persistenceunit.DefaultPersistenceUnitManager;
-
-import javax.persistence.spi.PersistenceUnitInfo;
-import java.util.Collections;
 
 /**
  * Database implementation for JPA configurations.
@@ -32,7 +30,7 @@ public class JpaPersistenceDatabase extends HibernateDatabase {
     }
 
     @Override
-    protected Configuration buildConfiguration(HibernateConnection connection) throws DatabaseException {
+    protected Metadata obtainMetadata(HibernateConnection connection) throws DatabaseException {
         return buildConfigurationFromXml(connection);
     }
 
@@ -40,7 +38,7 @@ public class JpaPersistenceDatabase extends HibernateDatabase {
      * Build a Configuration object assuming the connection path is a persistence XML configuration file.
      */
 
-    protected Configuration buildConfigurationFromXml(HibernateConnection connection) {
+    protected Metadata buildConfigurationFromXml(HibernateConnection connection) {
         DefaultPersistenceUnitManager internalPersistenceUnitManager = new DefaultPersistenceUnitManager();
 
         internalPersistenceUnitManager.setPersistenceXmlLocation(connection.getPath());
@@ -50,9 +48,9 @@ public class JpaPersistenceDatabase extends HibernateDatabase {
         PersistenceUnitInfo persistenceUnitInfo = internalPersistenceUnitManager.obtainDefaultPersistenceUnitInfo();
 
         EntityManagerFactoryBuilderImpl builder = (EntityManagerFactoryBuilderImpl) Bootstrap.getEntityManagerFactoryBuilder(persistenceUnitInfo,
-                Collections.emptyMap(), null);
-        ServiceRegistry serviceRegistry = builder.buildServiceRegistry();
-        return builder.buildHibernateConfiguration(serviceRegistry);
+                Collections.emptyMap(), (ClassLoader) null);
+        builder.build();
+        return builder.getMetadata();
     }
 
 

@@ -10,9 +10,9 @@ import liquibase.snapshot.InvalidExampleException;
 import liquibase.snapshot.SnapshotGenerator;
 import liquibase.snapshot.SnapshotGeneratorChain;
 import liquibase.structure.DatabaseObject;
-import org.hibernate.cfg.Configuration;
 
 import java.util.Iterator;
+import org.hibernate.boot.Metadata;
 
 /**
  * Base class for all Hibernate SnapshotGenerators
@@ -92,8 +92,8 @@ public abstract class HibernateSnapshotGenerator implements SnapshotGenerator {
 
     protected org.hibernate.mapping.Table findHibernateTable(DatabaseObject example, DatabaseSnapshot snapshot) throws DatabaseException {
         HibernateDatabase database = (HibernateDatabase) snapshot.getDatabase();
-        Configuration cfg = database.getConfiguration();
-        Iterator<org.hibernate.mapping.Table> tableMappings = cfg.getTableMappings();
+        Metadata metadata = database.getMetadata();
+        Iterator<org.hibernate.mapping.Table> tableMappings = metadata.collectTableMappings().iterator();
         while (tableMappings.hasNext()) {
             org.hibernate.mapping.Table hibernateTable = (org.hibernate.mapping.Table) tableMappings.next();
             if (hibernateTable.getName().equalsIgnoreCase(example.getName()))
