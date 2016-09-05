@@ -162,6 +162,7 @@ public class ColumnSnapshotGenerator extends HibernateSnapshotGenerator {
                                 column.setAutoIncrementInformation(new Column.AutoIncrementInformation());
                             }
                         }
+                        column.setNullable(false);
                     }
                 }
                 return;

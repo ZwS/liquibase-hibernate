@@ -10,7 +10,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import liquibase.Liquibase;
 import liquibase.database.Database;
-import liquibase.database.core.HsqlDatabase;
+import liquibase.database.core.H2Database;
 import liquibase.database.jvm.JdbcConnection;
 import liquibase.diff.DiffResult;
 import liquibase.diff.Difference;
@@ -50,9 +50,9 @@ public class HibernateIntegrationTest {
 
     @Before
     public void setUp() throws Exception {
-        Class.forName("org.hsqldb.jdbc.JDBCDriver");
-        connection = DriverManager.getConnection("jdbc:hsqldb:mem:TESTDB" + System.currentTimeMillis(), "SA", "");
-        database = new HsqlDatabase();
+        Class.forName("org.h2.Driver");
+        connection = DriverManager.getConnection("jdbc:h2:mem:TESTDB" + System.currentTimeMillis(), "SA", "");
+        database = new H2Database();
         database.setConnection(new JdbcConnection(connection));
 
 //        Class.forName("com.mysql.jdbc.Driver");
@@ -207,8 +207,8 @@ public class HibernateIntegrationTest {
         liquibase.update((String) null);
 
         long currentTimeMillis = System.currentTimeMillis();
-        Connection connection2 = DriverManager.getConnection("jdbc:hsqldb:mem:TESTDB2" + currentTimeMillis, "SA", "");
-        Database database2 = new HsqlDatabase();
+        Connection connection2 = DriverManager.getConnection("jdbc:h2:mem:TESTDB2" + currentTimeMillis, "SA", "");
+        Database database2 = new H2Database();
         database2.setConnection(new JdbcConnection(connection2));
 
         StandardServiceRegistryBuilder standardServiceRegistryBuilder = new StandardServiceRegistryBuilder();
