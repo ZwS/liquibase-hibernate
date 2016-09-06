@@ -10,13 +10,11 @@ import liquibase.ext.hibernate.database.connection.HibernateDriver;
 import liquibase.logging.LogFactory;
 import liquibase.logging.Logger;
 import org.hibernate.boot.Metadata;
-import org.hibernate.boot.registry.BootstrapServiceRegistry;
-import org.hibernate.boot.registry.BootstrapServiceRegistryBuilder;
-import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
-import org.hibernate.cfg.Environment;
+import org.hibernate.boot.MetadataBuilder;
+import org.hibernate.boot.model.naming.PhysicalNamingStrategy;
+import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.dialect.MySQLDialect;
-import org.hibernate.jpa.event.spi.JpaIntegrator;
 
 /**
  * Base class for all Hibernate Databases. This extension interacts with Hibernate by creating standard
@@ -46,7 +44,6 @@ public abstract class HibernateDatabase extends AbstractJdbcDatabase {
             LOG.info("Reading hibernate configuration " + getConnection().getURL());
 
             this.metadata = obtainMetadata(((HibernateConnection) ((JdbcConnection) conn).getUnderlyingConnection()));
-            this.dialect = configureDialect();
 
             afterSetup();
         } catch (DatabaseException e) {
@@ -58,30 +55,45 @@ public abstract class HibernateDatabase extends AbstractJdbcDatabase {
     /**
      * Return the dialect used by hibernate
      */
-    protected Dialect configureDialect() {
-        return metadata.getDatabase().getDialect();
+    protected String configureDialect(String dialectString) throws DatabaseException {
+        dialectString = ((HibernateConnection) ((JdbcConnection) getConnection()).getUnderlyingConnection())
+                .getProperties().getProperty(AvailableSettings.DIALECT, dialectString);
+
+        if (dialectString != null) {
+            try {
+                    dialect = (Dialect) Class.forName(dialectString).newInstance();
+            } catch (Exception e) {
+                throw new DatabaseException(e);
+            }
+        } else {
+            LOG.info("Unable to determinate dialect, using generic");
+            dialect = new HibernateGenericDialect();
+            dialectString = dialect.getClass().getName();
+        }
+
+        return dialectString;
     }
 
     /**
      * Configures the naming strategy use by the connection
-     *
-     * @param serviceRegistryBuilder
-     * @param connection the {@link HibernateConnection}
      */
-    protected void configurePhysicalNamingStrategy(StandardServiceRegistryBuilder serviceRegistryBuilder, HibernateConnection connection) {
-        String physicalNamingStrategy = connection.getProperties().getProperty("hibernate.physical_naming_strategy");
+    protected void configurePhysicalNamingStrategy(MetadataBuilder metadataBuilder) throws DatabaseException {
+        String physicalNamingStrategy = ((HibernateConnection) ((JdbcConnection) getConnection()).getUnderlyingConnection())
+                .getProperties().getProperty(AvailableSettings.PHYSICAL_NAMING_STRATEGY);
 
         if (physicalNamingStrategy != null) {
-            serviceRegistryBuilder.applySetting(Environment.PHYSICAL_NAMING_STRATEGY, physicalNamingStrategy);
+            try {
+                metadataBuilder.applyPhysicalNamingStrategy((PhysicalNamingStrategy) Class.forName(physicalNamingStrategy).newInstance());
+            } catch (Exception e) {
+                throw new DatabaseException(e);
+            }
         }
     }
 
-    ;
-
-/**
- * Perform any post-configuration setting logic.
- */
-protected void afterSetup() {
+    /**
+     * Perform any post-configuration setting logic.
+     */
+    protected void afterSetup() {
         if (dialect instanceof MySQLDialect) {
             indexesForForeignKeys = true;
         }
@@ -91,14 +103,6 @@ protected void afterSetup() {
      * Concrete implementations use this method to create the hibernate Configuration object based on the passed URL
      */
     protected abstract Metadata obtainMetadata(HibernateConnection conn) throws DatabaseException;
-    
-    protected BootstrapServiceRegistry buildBootstrapServiceRegistry() {
-        final BootstrapServiceRegistryBuilder bsrBuilder = new BootstrapServiceRegistryBuilder();
-
-		bsrBuilder.applyIntegrator(new JpaIntegrator());
-        
-        return bsrBuilder.build();
-    }
 
     @Override
     public boolean requiresPassword() {

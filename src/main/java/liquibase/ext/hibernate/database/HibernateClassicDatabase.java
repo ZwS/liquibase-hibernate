@@ -5,8 +5,10 @@ import liquibase.exception.DatabaseException;
 import liquibase.ext.hibernate.customfactory.CustomClassicConfigurationFactory;
 import liquibase.ext.hibernate.database.connection.HibernateConnection;
 import org.hibernate.boot.Metadata;
+import org.hibernate.boot.MetadataBuilder;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
+import org.hibernate.cfg.AvailableSettings;
 
 /**
  * Database implementation for "classic" hibernate configurations.
@@ -47,13 +49,19 @@ public class HibernateClassicDatabase extends HibernateDatabase {
     /**
      * Build a Configuration object assuming the connection path is a hibernate XML configuration file.
      */
-    protected Metadata buildConfigurationfromFile(HibernateConnection connection) {
-        StandardServiceRegistryBuilder standardServiceRegistryBuilder = new StandardServiceRegistryBuilder(buildBootstrapServiceRegistry());
-        
+    protected Metadata buildConfigurationfromFile(HibernateConnection connection) throws DatabaseException {
+        StandardServiceRegistryBuilder standardServiceRegistryBuilder = new StandardServiceRegistryBuilder();
         standardServiceRegistryBuilder.configure(connection.getPath());
-        configurePhysicalNamingStrategy(standardServiceRegistryBuilder, connection);
+        String dialectFromXml = (String) standardServiceRegistryBuilder.getAggregatedCfgXml().getConfigurationValues()
+                .get(AvailableSettings.DIALECT);
+        standardServiceRegistryBuilder.applySetting(AvailableSettings.DIALECT,
+                configureDialect(connection.getProperties().getProperty(AvailableSettings.DIALECT, dialectFromXml)));
+
         MetadataSources metadataSources = new MetadataSources(standardServiceRegistryBuilder.build());
-        return metadataSources.buildMetadata();
+        MetadataBuilder metadataBuilder = metadataSources.getMetadataBuilder();
+        configurePhysicalNamingStrategy(metadataBuilder);
+        metadataBuilder.enableNewIdentifierGeneratorSupport(true);
+        return metadataBuilder.build();
     }
 
     /**

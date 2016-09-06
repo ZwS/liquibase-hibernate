@@ -4,14 +4,18 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import javax.persistence.metamodel.ManagedType;
 import javax.persistence.spi.PersistenceUnitInfo;
 import javax.xml.parsers.DocumentBuilderFactory;
 import liquibase.database.DatabaseConnection;
 import liquibase.exception.DatabaseException;
 import liquibase.ext.hibernate.database.connection.HibernateConnection;
 import org.hibernate.boot.Metadata;
+import org.hibernate.boot.MetadataBuilder;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
+import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl;
 import org.hibernate.jpa.boot.spi.Bootstrap;
 import org.springframework.beans.MutablePropertyValues;
@@ -120,6 +124,7 @@ public class HibernateSpringDatabase extends HibernateDatabase {
             }
 
             standardServiceRegistryBuilder.applySettings(configurationProperties);
+            configureDialect(configurationProperties.getProperty(AvailableSettings.DIALECT));
         } else {
             throw new IllegalStateException("Please provide a 'hibernateProperties' property set to define the hibernate connection settings.");
         }
@@ -188,44 +193,54 @@ public class HibernateSpringDatabase extends HibernateDatabase {
      * @param connection
      * @return
      */
-    public Metadata buildConfigurationFromScanning(HibernateConnection connection) {
+    public Metadata buildConfigurationFromScanning(HibernateConnection connection) throws DatabaseException {
         String[] packagesToScan = connection.getPath().split(",");
 
         for (String packageName : packagesToScan) {
-            LOG.info("Found package "+packageName);
+            LOG.info("Found package " + packageName);
         }
 
         DefaultPersistenceUnitManager internalPersistenceUnitManager = new DefaultPersistenceUnitManager();
-
         internalPersistenceUnitManager.setPackagesToScan(packagesToScan);
 
-        String dialectName = connection.getProperties().getProperty("dialect", null);
-        if (dialectName == null) {
-            throw new IllegalArgumentException("A 'dialect' has to be specified.");
-        }
-        LOG.info("Found dialect "+dialectName);
+        StandardServiceRegistryBuilder standardServiceRegistryBuilder = new StandardServiceRegistryBuilder();
+        String dialect = configureDialect(connection.getProperties().getProperty("dialect"));
+        standardServiceRegistryBuilder.applySetting(AvailableSettings.DIALECT, dialect);
 
         internalPersistenceUnitManager.preparePersistenceUnitInfos();
         PersistenceUnitInfo persistenceUnitInfo = internalPersistenceUnitManager.obtainDefaultPersistenceUnitInfo();
         HibernateJpaVendorAdapter jpaVendorAdapter = new HibernateJpaVendorAdapter();
-        jpaVendorAdapter.setDatabasePlatform(dialectName);
-
-        String enhancedId = connection.getProperties().getProperty("hibernate.enhanced_id", "false");
-        LOG.info("Found hibernate.enhanced_id" + enhancedId);
-
-        Map<String, Object> jpaPropertyMap = jpaVendorAdapter.getJpaPropertyMap();
-        jpaPropertyMap.put("hibernate.archive.autodetection", "false");
-        jpaPropertyMap.put("hibernate.id.new_generator_mappings", enhancedId);
+        jpaVendorAdapter.setDatabasePlatform(dialect);
 
         if (persistenceUnitInfo instanceof SmartPersistenceUnitInfo) {
             ((SmartPersistenceUnitInfo) persistenceUnitInfo).setPersistenceProviderPackageName(jpaVendorAdapter.getPersistenceProviderRootPackage());
         }
 
-        EntityManagerFactoryBuilderImpl builder = (EntityManagerFactoryBuilderImpl) Bootstrap.getEntityManagerFactoryBuilder(persistenceUnitInfo,
-                jpaPropertyMap);
-        builder.build();
-        return builder.getMetadata();
+        Map<String, Object> jpaPropertyMap = jpaVendorAdapter.getJpaPropertyMap();
 
+        EntityManagerFactoryBuilderImpl builder = (EntityManagerFactoryBuilderImpl) Bootstrap
+                .getEntityManagerFactoryBuilder(persistenceUnitInfo, jpaPropertyMap);
+
+        MetadataSources metadataSources = new MetadataSources(standardServiceRegistryBuilder.build());
+
+        Set<ManagedType<?>> managedTypes = builder.build().getMetamodel().getManagedTypes();
+        for (ManagedType<?> mt : managedTypes) {
+            Class<?> javaType = mt.getJavaType();
+            if (javaType == null) {
+                continue;
+            }
+            metadataSources.addAnnotatedClass(javaType);
+        }
+
+        Package[] packages = Package.getPackages();
+        for (Package p : packages) {
+            metadataSources.addPackage(p);
+        }
+
+        MetadataBuilder metadataBuilder = metadataSources.getMetadataBuilder();
+        configurePhysicalNamingStrategy(metadataBuilder);
+
+        return metadataBuilder.build();
     }
 
     @Override

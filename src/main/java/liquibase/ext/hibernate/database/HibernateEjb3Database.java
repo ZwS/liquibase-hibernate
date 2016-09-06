@@ -1,11 +1,17 @@
 package liquibase.ext.hibernate.database;
 
 import java.util.Map;
+import java.util.Set;
+import javax.persistence.metamodel.ManagedType;
 import liquibase.database.DatabaseConnection;
 import liquibase.exception.DatabaseException;
 import liquibase.ext.hibernate.customfactory.CustomEjb3ConfigurationFactory;
 import liquibase.ext.hibernate.database.connection.HibernateConnection;
 import org.hibernate.boot.Metadata;
+import org.hibernate.boot.MetadataBuilder;
+import org.hibernate.boot.MetadataSources;
+import org.hibernate.boot.registry.StandardServiceRegistryBuilder;
+import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.jpa.HibernatePersistenceProvider;
 import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl;
 import org.hibernate.jpa.boot.spi.EntityManagerFactoryBuilder;
@@ -32,12 +38,37 @@ public class HibernateEjb3Database extends HibernateDatabase {
     /**
      * Build a Configuration object assuming the connection path is a hibernate XML configuration file.
      */
-    protected Metadata buildConfigurationfromFile(HibernateConnection connection) {
+    protected Metadata buildConfigurationfromFile(HibernateConnection connection) throws DatabaseException {
 
         MyHibernatePersistenceProvider persistenceProvider = new MyHibernatePersistenceProvider();
-        EntityManagerFactoryBuilderImpl builder = (EntityManagerFactoryBuilderImpl) persistenceProvider.getEntityManagerFactoryBuilderOrNull(connection.getPath(), connection.getProperties(), null);
-        builder.build();
-        return builder.getMetadata();
+        EntityManagerFactoryBuilderImpl builder = (EntityManagerFactoryBuilderImpl) persistenceProvider
+                .getEntityManagerFactoryBuilderOrNull(connection.getPath(), connection.getProperties(), null);
+        String dialectFromXml = (String) builder.getConfigurationValues().get(AvailableSettings.DIALECT);
+
+        StandardServiceRegistryBuilder standardServiceRegistryBuilder = new StandardServiceRegistryBuilder();
+        standardServiceRegistryBuilder.applySetting(AvailableSettings.DIALECT,
+                configureDialect(connection.getProperties().getProperty(AvailableSettings.DIALECT, dialectFromXml)));
+
+        MetadataSources metadataSources = new MetadataSources(standardServiceRegistryBuilder.build());
+        Set<ManagedType<?>> managedTypes = builder.build().getMetamodel().getManagedTypes();
+        for (ManagedType<?> mt : managedTypes) {
+            Class<?> javaType = mt.getJavaType();
+            if (javaType == null) {
+                continue;
+            }
+            metadataSources.addAnnotatedClass(javaType);
+        }
+
+        Package[] packages = Package.getPackages();
+        for (Package p : packages) {
+            metadataSources.addPackage(p);
+        }
+
+        MetadataBuilder metadataBuilder = metadataSources.getMetadataBuilder();
+        configurePhysicalNamingStrategy(metadataBuilder);
+        metadataBuilder.enableNewIdentifierGeneratorSupport(true);
+
+        return metadataBuilder.build();
     }
 
     /**
