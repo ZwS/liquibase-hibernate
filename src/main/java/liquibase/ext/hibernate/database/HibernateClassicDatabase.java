@@ -54,13 +54,18 @@ public class HibernateClassicDatabase extends HibernateDatabase {
         standardServiceRegistryBuilder.configure(connection.getPath());
         String dialectFromXml = (String) standardServiceRegistryBuilder.getAggregatedCfgXml().getConfigurationValues()
                 .get(AvailableSettings.DIALECT);
+        String physicalNamingStrategyFromXml = (String) standardServiceRegistryBuilder.getAggregatedCfgXml().getConfigurationValues()
+                .get(AvailableSettings.PHYSICAL_NAMING_STRATEGY);
+        String implicitNamingStrategyFromXml = (String) standardServiceRegistryBuilder.getAggregatedCfgXml().getConfigurationValues()
+                .get(AvailableSettings.IMPLICIT_NAMING_STRATEGY);
         standardServiceRegistryBuilder.applySetting(AvailableSettings.DIALECT,
                 configureDialect(connection.getProperties().getProperty(AvailableSettings.DIALECT, dialectFromXml)));
 
         MetadataSources metadataSources = new MetadataSources(standardServiceRegistryBuilder.build());
         MetadataBuilder metadataBuilder = metadataSources.getMetadataBuilder();
-        configurePhysicalNamingStrategy(metadataBuilder);
-        metadataBuilder.enableNewIdentifierGeneratorSupport(true);
+        configurePhysicalNamingStrategy(metadataBuilder, physicalNamingStrategyFromXml);
+        configureImplicitNamingStrategy(metadataBuilder, implicitNamingStrategyFromXml);
+
         return metadataBuilder.build();
     }
 

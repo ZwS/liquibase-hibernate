@@ -238,7 +238,8 @@ public class HibernateSpringDatabase extends HibernateDatabase {
         }
 
         MetadataBuilder metadataBuilder = metadataSources.getMetadataBuilder();
-        configurePhysicalNamingStrategy(metadataBuilder);
+        configurePhysicalNamingStrategy(metadataBuilder, (String) jpaPropertyMap.get(AvailableSettings.PHYSICAL_NAMING_STRATEGY));
+        configureImplicitNamingStrategy(metadataBuilder, (String) jpaPropertyMap.get(AvailableSettings.IMPLICIT_NAMING_STRATEGY));
 
         return metadataBuilder.build();
     }

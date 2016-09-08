@@ -1,6 +1,8 @@
 package liquibase.ext.hibernate.snapshot;
 
-import liquibase.datatype.LiquibaseDataType;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import liquibase.exception.DatabaseException;
 import liquibase.ext.hibernate.database.HibernateDatabase;
 import liquibase.ext.hibernate.snapshot.extension.ExtendedSnapshotGenerator;
@@ -9,16 +11,12 @@ import liquibase.ext.hibernate.snapshot.extension.TableGeneratorSnapshotGenerato
 import liquibase.snapshot.DatabaseSnapshot;
 import liquibase.snapshot.InvalidExampleException;
 import liquibase.structure.DatabaseObject;
-import liquibase.structure.core.*;
+import liquibase.structure.core.Schema;
+import liquibase.structure.core.Table;
+import org.hibernate.boot.Metadata;
 import org.hibernate.id.IdentifierGenerator;
 import org.hibernate.mapping.PersistentClass;
 import org.hibernate.mapping.RootClass;
-
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import org.hibernate.boot.Metadata;
 
 public class TableSnapshotGenerator extends HibernateSnapshotGenerator {
 
@@ -62,21 +60,10 @@ public class TableSnapshotGenerator extends HibernateSnapshotGenerator {
             HibernateDatabase database = (HibernateDatabase) snapshot.getDatabase();
             Metadata metadata = database.getMetadata();
 
-            Iterator<org.hibernate.mapping.Table> tableMappings = metadata.collectTableMappings().iterator();
-            while (tableMappings.hasNext()) {
-                org.hibernate.mapping.Table hibernateTable = (org.hibernate.mapping.Table) tableMappings.next();
-                if (hibernateTable.isPhysicalTable()) {
-                    Table table = new Table().setName(hibernateTable.getName());
-                    table.setSchema(schema);
-                    LOG.info("Found table " + table.getName());
-                    schema.addDatabaseObject(snapshotObject(table, snapshot));
-                }
-            }
+            Iterator<PersistentClass> tableMappings = metadata.getEntityBindings().iterator();
 
-            Iterator<PersistentClass> classMappings = metadata.getEntityBindings().iterator();
-            while (classMappings.hasNext()) {
-                PersistentClass persistentClass = (PersistentClass) classMappings
-                        .next();
+            while (tableMappings.hasNext()) {
+                PersistentClass persistentClass = tableMappings.next();
                 if (!persistentClass.isInherited()) {
                     IdentifierGenerator ig = persistentClass.getIdentifier().createIdentifierGenerator(
                             metadata.getIdentifierGeneratorFactory(),
@@ -95,26 +82,32 @@ public class TableSnapshotGenerator extends HibernateSnapshotGenerator {
                     }
                 }
             }
+
+            tableMappings = metadata.getEntityBindings().iterator();
+
+            while (tableMappings.hasNext()) {
+                PersistentClass pc = tableMappings.next();
+
+                org.hibernate.mapping.Table hTable = pc.getTable();
+                if (hTable.isPhysicalTable()) {
+                    Table table = new Table().setName(hTable.getName());
+                    table.setSchema(schema);
+                    LOG.info("Found table " + table.getName());
+                    schema.addDatabaseObject(snapshotObject(table, snapshot));
+                }
+            }
+
+            Iterator<org.hibernate.mapping.Collection> collIter = metadata.getCollectionBindings().iterator();
+            while (collIter.hasNext()) {
+                org.hibernate.mapping.Collection coll = collIter.next();
+                org.hibernate.mapping.Table hTable = coll.getCollectionTable();
+                if (hTable.isPhysicalTable()) {
+                    Table table = new Table().setName(hTable.getName());
+                    table.setSchema(schema);
+                    LOG.info("Found table " + table.getName());
+                    schema.addDatabaseObject(snapshotObject(table, snapshot));
+                }
+            }
         }
     }
-
-	/**
-	 * has <code>dataType</code> auto increment property ?
-	 */
-    //FIXME remove if will be accepted  https://github.com/liquibase/liquibase/pull/247
-	private boolean isAutoIncrement(LiquibaseDataType dataType) {
-		boolean retVal = false;
-		String methodName = "isAutoIncrement";
-		Method[] methods = dataType.getClass().getMethods();
-		for (Method method : methods) {
-			if (method.getName().equals(methodName)
-					&& method.getParameterTypes().length == 0) {
-				retVal = true;
-				break;
-			}
-		}
-
-		return retVal;
-	}
-
 }

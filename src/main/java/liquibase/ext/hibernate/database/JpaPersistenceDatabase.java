@@ -56,6 +56,10 @@ public class JpaPersistenceDatabase extends HibernateDatabase {
         EntityManagerFactoryBuilderImpl builder = (EntityManagerFactoryBuilderImpl) Bootstrap.getEntityManagerFactoryBuilder(persistenceUnitInfo,
                 Collections.emptyMap(), (ClassLoader) null);
         String dialectFromXml = (String) builder.getConfigurationValues().get(AvailableSettings.DIALECT);
+        String physicalNamingStrategyFromXml = (String) builder.getConfigurationValues()
+                .get(AvailableSettings.PHYSICAL_NAMING_STRATEGY);
+        String implicitNamingStrategyFromXml = (String) builder.getConfigurationValues()
+                .get(AvailableSettings.IMPLICIT_NAMING_STRATEGY);
 
         StandardServiceRegistryBuilder standardServiceRegistryBuilder = new StandardServiceRegistryBuilder();
         standardServiceRegistryBuilder.applySetting(AvailableSettings.DIALECT,
@@ -78,8 +82,8 @@ public class JpaPersistenceDatabase extends HibernateDatabase {
         }
 
         MetadataBuilder metadataBuilder = metadataSources.getMetadataBuilder();
-        configurePhysicalNamingStrategy(metadataBuilder);
-        metadataBuilder.enableNewIdentifierGeneratorSupport(true);
+        configurePhysicalNamingStrategy(metadataBuilder, physicalNamingStrategyFromXml);
+        configureImplicitNamingStrategy(metadataBuilder, implicitNamingStrategyFromXml);
 
         return metadataBuilder.build();
     }

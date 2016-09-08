@@ -11,6 +11,7 @@ import liquibase.logging.LogFactory;
 import liquibase.logging.Logger;
 import org.hibernate.boot.Metadata;
 import org.hibernate.boot.MetadataBuilder;
+import org.hibernate.boot.model.naming.ImplicitNamingStrategy;
 import org.hibernate.boot.model.naming.PhysicalNamingStrategy;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.dialect.Dialect;
@@ -75,10 +76,10 @@ public abstract class HibernateDatabase extends AbstractJdbcDatabase {
     }
 
     /**
-     * Configures the naming strategy use by the connection
+     * Configures the physical naming strategy use by the connection
      */
-    protected void configurePhysicalNamingStrategy(MetadataBuilder metadataBuilder) throws DatabaseException {
-        String physicalNamingStrategy = ((HibernateConnection) ((JdbcConnection) getConnection()).getUnderlyingConnection())
+    protected void configurePhysicalNamingStrategy(MetadataBuilder metadataBuilder, String physicalNamingStrategy) throws DatabaseException {
+        physicalNamingStrategy = ((HibernateConnection) ((JdbcConnection) getConnection()).getUnderlyingConnection())
                 .getProperties().getProperty(AvailableSettings.PHYSICAL_NAMING_STRATEGY);
 
         if (physicalNamingStrategy != null) {
@@ -87,6 +88,32 @@ public abstract class HibernateDatabase extends AbstractJdbcDatabase {
             } catch (Exception e) {
                 throw new DatabaseException(e);
             }
+        }
+    }
+
+    /**
+     * Configures the implicit naming strategy use by the connection
+     */
+    protected void configureImplicitNamingStrategy(MetadataBuilder builder, String implicitNamingStrategy) throws DatabaseException {
+        String namingStrategy;
+        namingStrategy = ((HibernateConnection) ((JdbcConnection) getConnection()).getUnderlyingConnection())
+                .getProperties().getProperty(AvailableSettings.IMPLICIT_NAMING_STRATEGY, implicitNamingStrategy);
+
+        try {
+            if (namingStrategy != null) {
+                if (namingStrategy.equals("default") || namingStrategy.equals("jpa"))
+                    builder.applyImplicitNamingStrategy(org.hibernate.boot.model.naming.ImplicitNamingStrategyJpaCompliantImpl.INSTANCE);
+                else if (namingStrategy.equals("legacy-hbm"))
+                    builder.applyImplicitNamingStrategy(org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyHbmImpl.INSTANCE);
+                else if (namingStrategy.equals("legacy-jpa"))
+                    builder.applyImplicitNamingStrategy(org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl.INSTANCE);
+                else if (namingStrategy.equals("component-path"))
+                    builder.applyImplicitNamingStrategy(org.hibernate.boot.model.naming.ImplicitNamingStrategyComponentPathImpl.INSTANCE);
+                else
+                    builder.applyImplicitNamingStrategy((ImplicitNamingStrategy) Class.forName(namingStrategy).newInstance());
+            }
+        } catch (Exception e) {
+            throw new DatabaseException(e);
         }
     }
 
